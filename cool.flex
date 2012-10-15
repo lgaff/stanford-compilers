@@ -51,18 +51,23 @@ extern YYSTYPE cool_yylval;
  */
 
  /* basic character classes */
-DIGIT           [0-9]
- /* operators */
-DARROW          => 
- /* punctuation */
+DIGIT     [0-9]
+UPCHAR    [A-Z]
+DOWNCHAR  [a-z]
+TYPEID    [A-Z](UPCHAR|DOWNCHAR|DIGIT|_)+
 
-LCMNT           --
-BCMT_OP         \(\*
-BCMT_CL         \*\)
+/* operators */
+DARROW    => 
+ASSIGN <-
+/* punctuation */
 
- /* keywords and identifiers */
-BTRUE            true
-BFALSE           false
+LCMNT     --
+BCMT_OP   \(\*
+BCMT_CL   \*\)
+
+/* keywords and identifiers */
+BTRUE     true
+BFALSE    false
 %%
 
  /*
@@ -85,7 +90,7 @@ BFALSE           false
   *  The multiple-character operators.
   */
 {DARROW}		{ return (DARROW); }
-
+{ASSIGN} { return (ASSIGN); }
  /*
   * Keywords are case-insensitive except for the values true and false,
   * which must begin with a lower-case letter.
