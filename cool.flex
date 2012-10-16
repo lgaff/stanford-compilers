@@ -138,16 +138,16 @@ WHITESPACE [\t\n ]+
                         *
                         */
 <INITIAL>{QUOTE}        { BEGIN STRCONST; string_buf_ptr = string_buf; }
-<STRCONST>[^\\\"\0]* { printf("<STRCONST>[^\\\"\\0]*: %s\n", yytext); if(!add_to_buffer(yytext)) { BEGIN 0; return ERROR; } }
-<STRCONST>\\. { printf("<STRCONST>\\.: %s\n", yytext); if(!add_to_buffer(yytext)) { BEGIN 0; return ERROR; } }
-<STRCONST>\\\n { printf("<STRCONST>\\\\n: %s\n", yytext); if(!add_to_buffer(yytext)) { BEGIN 0; return ERROR; } }
+<STRCONST>[^\\\"\0]* { if(!add_to_buffer(yytext)) { BEGIN 0; return ERROR; } }
+<STRCONST>\\. { if(!add_to_buffer(yytext)) { BEGIN 0; return ERROR; } }
+<STRCONST>\\\n { if(!add_to_buffer(yytext)) { BEGIN 0; return ERROR; } }
 <STRCONST>{QUOTE}       { BEGIN 0; 
                           cool_yylval.symbol = stringtable.add_string(string_buf);
                           reset_buffer();
                           return STR_CONST;
                         }
-<STRCONST><<EOF>>       { BEGIN 0; cool_yylval.error_msg = "EOF in string constant."; return ERROR; }
-<STRCONST>\0            { BEGIN 0; cool_yylval.error_msg = "String contains null character."; return ERROR; }
+<STRCONST><<EOF>>       { BEGIN 0; cool_yylval.error_msg = "EOF in string constant."; reset_buffer(); return ERROR; }
+<STRCONST>\0            { BEGIN 0; cool_yylval.error_msg = "String contains null character."; reset_buffer(); return ERROR; }
 
 <INITIAL>{DIGIT}+       { cool_yylval.symbol = inttable.add_string(yytext); return (INT_CONST); }
 
@@ -157,58 +157,46 @@ WHITESPACE [\t\n ]+
 
 int add_to_buffer(char *str)
 {
-     printf("ENTER: %s\n", str);
      char next;
      while((next = *str++) != '\0') {
-          printf("char(%c): ", next);
           if(string_buf_ptr == &(string_buf[MAX_STR_CONST])) {
                cool_yylval.error_msg = "String constant too long.";
+               reset_buffer();
                return 0;	
           }
           else {
                if(next == '\n') {
-                    printf("Matched newline.\n");
                     cool_yylval.error_msg = "Unterminated string constant.";
+                    reset_buffer();
                     return 0;
                }                    
                if(next == '\\') {
-                    printf("Matched \\.\n");
                     next = *str++;
-                    printf("switch char(%c): ", next);
                     switch(next) {
                     case 'n':
-                         printf("matched n.\n");
                          next = '\n';
                          break;
                     case 't':
-                         printf("matched t.\n");
                          next = '\t';
                          break;
                     case 'b':
-                         printf("matched b.\n");
                          next = '\b';
                          break;
                     case 'f':
-                         printf("matched f.\n");
                          next = '\f';
                          break;
                     case '\\':
-                         printf("matched \\.\n");
                          next = '\\';
                          break;
                     case '0':
-                         printf("matched 0.\n");
                          next = '\0';
                          break;
                     default:
-                         printf("matched %c.\n", next);
                          /* next = next (Just pass it through) */
                          break;
                     }
                }
-               printf("%c onto *string_buf_ptr, ", next);
                *string_buf_ptr++ = next;
-               printf("Buffer contents now: %s\n", string_buf);
           }
      }
      return 1;
