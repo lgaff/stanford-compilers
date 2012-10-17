@@ -41,10 +41,14 @@ extern YYSTYPE cool_yylval;
 
 int add_to_buffer(char *str);
 void reset_buffer();
+bool strconst_err = false;
+int char_count;
 
 /*
  *  Add Your own definitions here
  */
+
+int comment_nest = 0;
 
 %}
 /* Line and block comment start conditions */
@@ -57,14 +61,16 @@ void reset_buffer();
 DIGIT     [0-9]
 UPCHAR    [A-Z]
 DOWNCHAR  [a-z]
-TYPEID    [A-Z][a-zA-Z0-9_]+
-OBJECTID [a-z][a-zA-Z0-9_]+
+TYPEID    [A-Z][a-zA-Z0-9_]*
+OBJECTID [a-z][a-zA-Z0-9_]*
 QUOTE    [\"]
 SLOSH \\
 
 /* operators */
 DARROW    => 
 ASSIGN <-
+LTE <=
+
 /* punctuation */
 
 LPAREN \(
@@ -77,33 +83,45 @@ BCMT_OP   \(\*
 BCMT_CL   \*\)
 
 /* keywords and identifiers */
-BTRUE     true
-BFALSE    false
+BTRUE     t(?i:rue)
+BFALSE    f(?i:alse)
 
-WHITESPACE [\t\n ]+
+WHITESPACE [\t\f\r\v ]+
 %%
 
  /*
   *  Nested comments
   */
---                      { BEGIN LCMNT; }
+<INITIAL>--             { BEGIN LCMNT; }
 <LCMNT>[^\n]*           { }
-<LCMNT>\n               { BEGIN 0; } 
-\(\*                    { BEGIN BCMNT; }
-<BCMNT>[^\*]/[^\)]*     { }
+<LCMNT>\n               { curr_lineno++; BEGIN 0; } 
+<INITIAL>\(\*           { comment_nest++; BEGIN BCMNT; }
+<BCMNT>{BCMT_OP}        { comment_nest++; }
+<BCMNT>{BCMT_CL}        { if(--comment_nest == 0) {  BEGIN 0; } }
+<BCMNT>[^(*\n]*         { /* OM NOM NOM NOM */ }
+<BCMNT>[*]/[^()\n]*     { /* OM NOM NOM NOM */ }
+<BCMNT>\([^*\n]*        { /* OM NOM NOM NOM */ }
+<BCMNT>\n               { curr_lineno++; }
+
 <BCMNT><<EOF>>          { BEGIN 0; 
                         cool_yylval.error_msg = "EOF in comment"; 
-		        return ERROR; 
-                        }
-<BCMNT>{BCMT_CL}        { BEGIN 0; }   
-{BCMT_CL}               { cool_yylval.error_msg = "Unmatched *)"; 
                         return ERROR; 
                         }
-                        /*
-                        *  The multiple-character operators.
+<INITIAL>{BCMT_CL}      { cool_yylval.error_msg = "Unmatched *)"; 
+                        return ERROR; 
+                        }
+                    /* Single character arithmetic operators */
+<INITIAL>[\-+*/~]    { return ((char)yytext[0]); }
+<INITIAL>[;:(){},.@]  { return ((char)yytext[0]); }
+<INITIAL>[<=]  { return ((char)yytext[0]); }
+                    /*
+                    *  The multiple-character operators.
                         */
+<INITIAL>{LTE} { return (LE); }
 <INITIAL>{DARROW}      	{ return (DARROW); }
 <INITIAL>{ASSIGN}       { return (ASSIGN); }
+
+
 
                         /*
                         * Keywords are case-insensitive except for the values true and false,
@@ -138,37 +156,78 @@ WHITESPACE [\t\n ]+
                         *
                         */
 <INITIAL>{QUOTE}        { BEGIN STRCONST; string_buf_ptr = string_buf; }
-<STRCONST>[^\\\"\0]* { if(!add_to_buffer(yytext)) { BEGIN 0; return ERROR; } }
-<STRCONST>\\. { if(!add_to_buffer(yytext)) { BEGIN 0; return ERROR; } }
-<STRCONST>\\\n { if(!add_to_buffer(yytext)) { BEGIN 0; return ERROR; } }
-<STRCONST>{QUOTE}       { BEGIN 0; 
-                          cool_yylval.symbol = stringtable.add_string(string_buf);
-                          reset_buffer();
-                          return STR_CONST;
+<STRCONST>[^\\\"\0\n]*  { add_to_buffer(yytext); }
+<STRCONST>\0            { if(!strconst_err) 
+                          { 
+                               cool_yylval.error_msg = "lex String contains null character."; 
+                               strconst_err = true; 
+                          } 
+                          
                         }
-<STRCONST><<EOF>>       { BEGIN 0; cool_yylval.error_msg = "EOF in string constant."; reset_buffer(); return ERROR; }
-<STRCONST>\0            { BEGIN 0; cool_yylval.error_msg = "String contains null character."; reset_buffer(); return ERROR; }
+<STRCONST>\\.           { add_to_buffer(yytext); }
+<STRCONST>\n            { curr_lineno++;
+                          BEGIN 0; 
+                          reset_buffer(); 
+                          if(!strconst_err) 
+                          { 
+                               cool_yylval.error_msg = "Unterminated string constant."; 
+                               return ERROR;
+
+                          } 
+                        }
+<STRCONST>\\\n          { curr_lineno++; add_to_buffer(yytext); }
+<STRCONST>{QUOTE}       { BEGIN 0; 
+                          if(strconst_err) { 
+                               reset_buffer();
+                               return ERROR;
+                          }
+                          else {
+                               cool_yylval.symbol = stringtable.add_string(string_buf);
+                               reset_buffer();
+                               return STR_CONST;
+                          }
+                        }
+<STRCONST><<EOF>>       { BEGIN 0; 
+                          if(!strconst_err) 
+                          { 
+                               cool_yylval.error_msg = "EOF in string constant."; 
+                               return ERROR;
+                          }
+                          reset_buffer(); 
+                          return ERROR; 
+                        }
 
 <INITIAL>{DIGIT}+       { cool_yylval.symbol = inttable.add_string(yytext); return (INT_CONST); }
 
- /* change this later. whitespace should be stripped */
- /*{WHITESPACE} { cool_yylval.symbol = stringtable.add_string(yytext); return STR_CONST; } */
+
+
+
+
+{WHITESPACE} { /* Strip whitepace */ }
+<INITIAL>\n { curr_lineno++; }
+. { cool_yylval.error_msg = yytext; return ERROR; }
 %%
 
 int add_to_buffer(char *str)
-{
+{  
      char next;
      while((next = *str++) != '\0') {
-          if(string_buf_ptr == &(string_buf[MAX_STR_CONST])) {
-               cool_yylval.error_msg = "String constant too long.";
-               reset_buffer();
-               return 0;	
+          if(string_buf_ptr == &(string_buf[MAX_STR_CONST-1])) {
+               if(!strconst_err) 
+               {
+                    cool_yylval.error_msg = "String constant too long.";
+               }
+               strconst_err = true;
+               return 0;
           }
           else {
                if(next == '\n') {
-                    cool_yylval.error_msg = "Unterminated string constant.";
-                    reset_buffer();
-                    return 0;
+                    if(!strconst_err)
+                    {
+                         cool_yylval.error_msg = "Unterminated string constant.";
+                         printf("Unterminatador: \"%s\"\n", yytext);
+                    }
+                    strconst_err = true;
                }                    
                if(next == '\\') {
                     next = *str++;
@@ -189,7 +248,14 @@ int add_to_buffer(char *str)
                          next = '\\';
                          break;
                     case '0':
-                         next = '\0';
+                         next = '0';
+                         break;
+                    case '\0':
+                         if(!strconst_err)
+                         {
+                              cool_yylval.error_msg = "String contains null character.";
+                         }
+                         strconst_err = true;
                          break;
                     default:
                          /* next = next (Just pass it through) */
@@ -207,4 +273,6 @@ void reset_buffer()
      int i;
      for(i = 0;i <= MAX_STR_CONST;i++) { string_buf[i] = '\0'; }
      string_buf_ptr = string_buf;
+     strconst_err = false;
 }
+
