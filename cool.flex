@@ -225,7 +225,6 @@ int add_to_buffer(char *str)
                     if(!strconst_err)
                     {
                          cool_yylval.error_msg = "Unterminated string constant.";
-                         printf("Unterminatador: \"%s\"\n", yytext);
                     }
                     strconst_err = true;
                }                    
