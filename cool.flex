@@ -1,3 +1,4 @@
+
 /*
  *  The scanner definition for COOL.
  */
@@ -58,35 +59,35 @@ int comment_nest = 0;
  */
 
  /* basic character classes */
-DIGIT     [0-9]
-UPCHAR    [A-Z]
-DOWNCHAR  [a-z]
-TYPEID    [A-Z][a-zA-Z0-9_]*
-OBJECTID [a-z][a-zA-Z0-9_]*
-QUOTE    [\"]
-SLOSH \\
+DIGIT       [0-9]
+UPCHAR      [A-Z]
+DOWNCHAR    [a-z]
+TYPEID      [A-Z][a-zA-Z0-9_]*
+OBJECTID    [a-z][a-zA-Z0-9_]*
+QUOTE       [\"]
+SLOSH       \\
 
-/* operators */
-DARROW    => 
-ASSIGN <-
-LTE <=
+/*          operators */
+DARROW      => 
+ASSIGN      <-
+LTE         <=
 
-/* punctuation */
+/*          punctuation */
 
-LPAREN \(
-RPAREN \)
-LBRACE \{
-RBRACE \}
-TERMINATOR [;]
-LCMNT     --
-BCMT_OP   \(\*
-BCMT_CL   \*\)
+LPAREN      \(
+RPAREN      \)
+LBRACE      \{
+RBRACE      \}
+TERMINATOR  [;]
+LCMNT       --
+BCMT_OP     \(\*
+BCMT_CL     \*\)
 
-/* keywords and identifiers */
-BTRUE     t(?i:rue)
-BFALSE    f(?i:alse)
+/*          keywords and identifiers */
+BTRUE       t(?i:rue)
+BFALSE      f(?i:alse)
 
-WHITESPACE [\t\f\r\v ]+
+WHITESPACE  [\t\f\r\v ]+
 %%
 
  /*
@@ -110,14 +111,14 @@ WHITESPACE [\t\f\r\v ]+
 <INITIAL>{BCMT_CL}      { cool_yylval.error_msg = "Unmatched *)"; 
                         return ERROR; 
                         }
-                    /* Single character arithmetic operators */
-<INITIAL>[\-+*/~]    { return ((char)yytext[0]); }
-<INITIAL>[;:(){},.@]  { return ((char)yytext[0]); }
-<INITIAL>[<=]  { return ((char)yytext[0]); }
-                    /*
-                    *  The multiple-character operators.
+                        /* Single character arithmetic operators */
+<INITIAL>[\-+*/~]       { return ((char)yytext[0]); }
+<INITIAL>[;:(){},.@]    { return ((char)yytext[0]); }
+<INITIAL>[<=]           { return ((char)yytext[0]); }
+                        /*
+                        *  The multiple-character operators.
                         */
-<INITIAL>{LTE} { return (LE); }
+<INITIAL>{LTE}          { return (LE); }
 <INITIAL>{DARROW}      	{ return (DARROW); }
 <INITIAL>{ASSIGN}       { return (ASSIGN); }
 
@@ -158,11 +159,10 @@ WHITESPACE [\t\f\r\v ]+
 <INITIAL>{QUOTE}        { BEGIN STRCONST; string_buf_ptr = string_buf; }
 <STRCONST>[^\\\"\0\n]*  { add_to_buffer(yytext); }
 <STRCONST>\0            { if(!strconst_err) 
-                          { 
-                               cool_yylval.error_msg = "lex String contains null character."; 
-                               strconst_err = true; 
-                          } 
-                          
+                              { 
+                                   cool_yylval.error_msg = "lex String contains null character."; 
+                                   strconst_err = true; 
+                              } 
                         }
 <STRCONST>\\.           { add_to_buffer(yytext); }
 <STRCONST>\n            { curr_lineno++;
@@ -172,12 +172,12 @@ WHITESPACE [\t\f\r\v ]+
                           { 
                                cool_yylval.error_msg = "Unterminated string constant."; 
                                return ERROR;
-
                           } 
                         }
 <STRCONST>\\\n          { curr_lineno++; add_to_buffer(yytext); }
 <STRCONST>{QUOTE}       { BEGIN 0; 
-                          if(strconst_err) { 
+                          if(strconst_err) 
+                          {  
                                reset_buffer();
                                return ERROR;
                           }
@@ -199,13 +199,9 @@ WHITESPACE [\t\f\r\v ]+
 
 <INITIAL>{DIGIT}+       { cool_yylval.symbol = inttable.add_string(yytext); return (INT_CONST); }
 
-
-
-
-
-{WHITESPACE} { /* Strip whitepace */ }
-<INITIAL>\n { curr_lineno++; }
-. { cool_yylval.error_msg = yytext; return ERROR; }
+{WHITESPACE}            { /* Strip whitepace */ }
+<INITIAL>\n             { curr_lineno++; }
+.                       { cool_yylval.error_msg = yytext; return ERROR; }
 %%
 
 int add_to_buffer(char *str)
